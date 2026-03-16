@@ -14,7 +14,23 @@ class ClassRepository {
                 .get()
                 .await()
             val classes = snapshot.documents.map { doc ->
-                doc.toObject(ClassRoom::class.java)?.copy(id = doc.id) ?: ClassRoom()
+                val classCode = doc.getString("classCode")
+                    ?: doc.getString("code")
+                    ?: ""
+
+                // Đếm số sinh viên từ subcollection
+                val studentSnapshot = db.collection("classes")
+                    .document(doc.id)
+                    .collection("students")
+                    .get()
+                    .await()
+                val studentCount = studentSnapshot.documents.size
+
+                doc.toObject(ClassRoom::class.java)?.copy(
+                    id = doc.id,
+                    classCode = classCode,
+                    studentCount = studentCount
+                ) ?: ClassRoom()
             }
             Result.success(classes)
         } catch (e: Exception) {
@@ -25,7 +41,23 @@ class ClassRepository {
     suspend fun getClassById(classId: String): Result<ClassRoom> {
         return try {
             val doc = db.collection("classes").document(classId).get().await()
-            val classRoom = doc.toObject(ClassRoom::class.java)?.copy(id = doc.id)
+            val classCode = doc.getString("classCode")
+                ?: doc.getString("code")
+                ?: ""
+
+            // Đếm số sinh viên từ subcollection
+            val studentSnapshot = db.collection("classes")
+                .document(classId)
+                .collection("students")
+                .get()
+                .await()
+            val studentCount = studentSnapshot.documents.size
+
+            val classRoom = doc.toObject(ClassRoom::class.java)?.copy(
+                id = doc.id,
+                classCode = classCode,
+                studentCount = studentCount
+            )
                 ?: return Result.failure(Exception("Class not found"))
             Result.success(classRoom)
         } catch (e: Exception) {

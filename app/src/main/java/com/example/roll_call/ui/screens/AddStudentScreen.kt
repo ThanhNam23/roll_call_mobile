@@ -9,6 +9,7 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -335,7 +336,7 @@ fun FaceRegistrationDialog(
 
     val capturedEmbeddings = remember { mutableStateListOf<FloatArray>() }
     var isCapturing by remember { mutableStateOf(false) }
-    var statusText by remember { mutableStateOf("📷 Chụp 5 ảnh ở các góc khác nhau để tăng độ chính xác") }
+    var statusText by remember { mutableStateOf("") }
 
     // AtomicBoolean để đọc an toàn từ background thread của analyzer
     val shouldCapture = remember { AtomicBoolean(false) }
@@ -348,21 +349,45 @@ fun FaceRegistrationDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = EduSurface),
+            elevation = CardDefaults.cardElevation(4.dp)
+        ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Đăng ký khuôn mặt", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = EduTextPrimary)
-                Text(student.name, color = EduBlue, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(12.dp))
+                // Header
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Đăng ký khuôn mặt",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = EduTextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        student.name,
+                        color = EduBlue,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Camera preview box
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
-                        .background(Color.Black, RoundedCornerShape(8.dp))
-                        .border(2.dp, EduBlue, RoundedCornerShape(8.dp))
+                        .height(300.dp)
+                        .background(Color.Black, RoundedCornerShape(12.dp))
+                        .border(2.dp, EduBlue, RoundedCornerShape(12.dp))
                 ) {
                     if (hasCameraPermission) {
                         val cameraController = remember {
@@ -389,15 +414,15 @@ fun FaceRegistrationDialog(
                                                     if (cropped != null) {
                                                         val embedding = faceHelper.extractEmbedding(cropped)
                                                         capturedEmbeddings.add(embedding)
-                                                        statusText = "✅ Đã chụp ${capturedEmbeddings.size}/3 ảnh"
+                                                        statusText = "✅ Đã chụp ${capturedEmbeddings.size} ảnh"
                                                     } else {
                                                         statusText = "❌ Không thấy khuôn mặt rõ, thử lại"
                                                     }
                                                 } else {
-                                                    statusText = "❌ Không phát hiện khuôn mặt, thử lại"
+                                                    statusText = "❌ Không phát hiện khuôn mặt"
                                                 }
                                             } catch (e: Exception) {
-                                                statusText = "❌ Lỗi xử lý: ${e.message}"
+                                                statusText = "❌ Lỗi: ${e.message?.take(30)}"
                                             }
                                             isCapturing = false
                                         }
@@ -420,87 +445,155 @@ fun FaceRegistrationDialog(
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        // Status overlay
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(8.dp)
-                                .background(Color(0xAA000000), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(statusText, color = Color.White, fontSize = 12.sp)
-                        }
+                        // Guide overlay with face frame
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Hướng dẫn căn giữa
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val width = size.width
+                                val height = size.height
+                                val faceWidth = width * 0.6f
+                                val faceHeight = height * 0.7f
+                                val left = (width - faceWidth) / 2
+                                val top = (height - faceHeight) / 2
 
-                        // Nút chụp
-                        Button(
-                            onClick = {
-                                if (!isCapturing) {
-                                    isCapturing = true
-                                    statusText = "📸 Đang chụp..."
-                                    shouldCapture.set(true)
+                                // Vẽ hộp hướng dẫn
+                                drawRect(
+                                    color = Color.White,
+                                    topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                                    size = androidx.compose.ui.geometry.Size(faceWidth, faceHeight),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                                )
+                            }
+
+                            // Status overlay - bottom center
+                            if (statusText.isNotEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(12.dp)
+                                        .background(Color(0xDD000000), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        statusText,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp),
-                            enabled = !isCapturing,
-                            colors = ButtonDefaults.buttonColors(containerColor = EduBlue)
-                        ) {
-                            Text("Chụp (${capturedEmbeddings.size}/3)")
+                            }
+
+                            // Nút chụp - dưới phải
+                            Button(
+                                onClick = {
+                                    if (!isCapturing && capturedEmbeddings.size < 3) {
+                                        isCapturing = true
+                                        statusText = "📸 Đang chụp..."
+                                        shouldCapture.set(true)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(12.dp),
+                                enabled = !isCapturing && capturedEmbeddings.size < 3,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = EduBlue,
+                                    disabledContainerColor = EduBlue.copy(alpha = 0.6f)
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    "📸 Chụp",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
 
                     } else {
                         Column(
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Cần quyền camera", color = Color.White)
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Icon(
+                                Icons.Default.Face,
+                                null,
+                                modifier = Modifier.size(48.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Cần quyền truy cập camera", color = Color.White, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
                             Button(
                                 onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                                 colors = ButtonDefaults.buttonColors(containerColor = EduBlue)
                             ) {
-                                Text("Cấp quyền")
+                                Text("Cấp quyền camera")
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Progress section
                 if (capturedEmbeddings.size > 0) {
-                    LinearProgressIndicator(
-                        progress = { capturedEmbeddings.size / 5f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = EduBlue
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "${capturedEmbeddings.size}/5 ảnh đã chụp — chụp nhiều góc khác nhau",
-                        fontSize = 13.sp,
-                        color = EduBlue
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LinearProgressIndicator(
+                            progress = { (capturedEmbeddings.size / 3f).coerceAtMost(1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp),
+                            color = EduBlue,
+                            trackColor = EduBorder
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "${capturedEmbeddings.size}/3 ảnh",
+                            fontSize = 12.sp,
+                            color = EduTextSecondary
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                        Text("Hủy")
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Hủy", fontWeight = FontWeight.Medium, color = EduBlue)
                     }
                     Button(
                         onClick = {
                             val avgEmbedding = averageEmbeddings(capturedEmbeddings)
                             onEmbeddingSaved(avgEmbedding)
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
                         enabled = capturedEmbeddings.size >= 1,
-                        colors = ButtonDefaults.buttonColors(containerColor = EduBlue)
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = EduGreen,
+                            disabledContainerColor = EduBorder
+                        )
                     ) {
-                        Text("Lưu khuôn mặt (${capturedEmbeddings.size} ảnh)")
+                        Text(
+                            "✓ Lưu",
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }

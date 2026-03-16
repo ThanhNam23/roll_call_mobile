@@ -63,7 +63,7 @@ fun ClassListScreen(
                             contentAlignment = Alignment.Center
                         ) { Text("📋", fontSize = 16.sp) }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.padding(top = 2.dp)) {
                             Text("EduManage", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = EduTextPrimary)
                             Text("Điểm danh & kiểm tra", fontSize = 11.sp, color = EduTextSecondary)
                         }
@@ -143,16 +143,47 @@ fun ClassCard(classRoom: ClassRoom, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(0.5.dp)
     ) {
         Column {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("📚", fontSize = 18.sp)
-                Spacer(modifier = Modifier.width(12.dp))
+            // Header: Mã lớp + số SV
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    if (classRoom.classCode.isNotBlank()) classRoom.classCode else classRoom.id,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EduTextPrimary
+                )
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = EduBlueLight
+                ) {
+                    Text(
+                        "${classRoom.studentCount} SV",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = EduBlue
+                    )
+                }
+            }
+
+            // Content: Tên môn + icon
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(classRoom.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = EduTextPrimary)
+                    Text(classRoom.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = EduTextPrimary)
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(classRoom.subject, fontSize = 12.sp, color = EduTextSecondary)
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = EduTextMuted, modifier = Modifier.size(18.dp))
             }
+
             HorizontalDivider(color = EduBorder, thickness = 0.5.dp)
+
+            // Footer: Actions
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -163,11 +194,6 @@ fun ClassCard(classRoom: ClassRoom, onClick: () -> Unit) {
                     Icon(Icons.Default.CheckCircle, null, tint = EduGreen, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Điểm danh", fontSize = 12.sp, color = EduTextSecondary)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.People, null, tint = EduBlue, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("${classRoom.studentCount} SV", fontSize = 12.sp, color = EduTextSecondary)
                 }
             }
         }
