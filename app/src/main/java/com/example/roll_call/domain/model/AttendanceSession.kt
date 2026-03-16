@@ -6,6 +6,7 @@ data class AttendanceSession(
     val id: String = "",
     val classId: String = "",
     val className: String = "",
+    val sessionNumber: String = "",
     val date: Timestamp = Timestamp.now(),
     val teacherId: String = "",
     val totalStudents: Int = 0,

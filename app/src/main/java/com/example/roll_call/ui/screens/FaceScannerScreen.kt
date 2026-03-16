@@ -72,6 +72,8 @@ fun FaceScannerScreen(
     val faceHelper = remember { FaceRecognitionHelper(context) }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var isProcessing by remember { mutableStateOf(false) }
+    var showSessionNameDialog by remember { mutableStateOf(false) }
+    var sessionNumber by remember { mutableStateOf("") }
 
     // Multi-frame voting: tích lũy kết quả nhận diện trước khi xác nhận
     val recognitionVotes = remember { mutableMapOf<String, Int>() }   // studentId -> count
@@ -80,6 +82,38 @@ fun FaceScannerScreen(
     // Cooldown per student: tránh nhận diện lại người vừa điểm danh
     val studentCooldowns = remember { mutableMapOf<String, Long>() }
     val COOLDOWN_MS = 5000L
+
+    // Dialog nhập tên buổi
+    if (showSessionNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showSessionNameDialog = false },
+            title = { Text("Tên buổi điểm danh") },
+            text = {
+                OutlinedTextField(
+                    value = sessionNumber,
+                    onValueChange = { sessionNumber = it },
+                    placeholder = { Text("Nhập tên buổi (tùy chọn)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showSessionNameDialog = false
+                    viewModel.saveAttendance(classId, className, sessionNumber) { sessionIdResult ->
+                        onFinish(sessionIdResult)
+                    }
+                }) {
+                    Text("Lưu")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSessionNameDialog = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -203,9 +237,7 @@ fun FaceScannerScreen(
                     )
                     Button(
                         onClick = {
-                            viewModel.saveAttendance(classId, className) { sessionId ->
-                                onFinish(sessionId)
-                            }
+                            showSessionNameDialog = true
                         },
                         enabled = !uiState.isSaving
                     ) {

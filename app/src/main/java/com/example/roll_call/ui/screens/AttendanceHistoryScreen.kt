@@ -147,7 +147,11 @@ fun SessionCard(session: AttendanceSession, onClick: () -> Unit, onDelete: () ->
             Text("📅", fontSize = 20.sp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(dateStr, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = EduTextPrimary)
+                if (session.sessionNumber.isNotEmpty()) {
+                    Text(session.sessionNumber, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = EduTextPrimary)
+                    Spacer(Modifier.height(2.dp))
+                }
+                Text(dateStr, fontSize = 13.sp, color = EduTextSecondary)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(shape = RoundedCornerShape(6.dp), color = ratioBg) {
@@ -189,7 +193,11 @@ fun SessionDetailScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Chi tiết buổi điểm danh", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = EduTextPrimary)
+                        if (session.sessionNumber.isNotEmpty()) {
+                            Text(session.sessionNumber, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = EduTextPrimary)
+                        } else {
+                            Text("Chi tiết buổi điểm danh", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = EduTextPrimary)
+                        }
                         Text(dateStr, fontSize = 12.sp, color = EduTextSecondary)
                     }
                 },

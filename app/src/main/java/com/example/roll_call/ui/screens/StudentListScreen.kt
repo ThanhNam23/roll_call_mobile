@@ -109,7 +109,7 @@ fun StudentListScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(uiState.students) { student ->
+                            items(uiState.students.sortedBy { it.studentCode }) { student ->
                                 StudentItem(student = student)
                             }
                         }

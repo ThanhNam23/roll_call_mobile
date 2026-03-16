@@ -13,6 +13,7 @@ class AttendanceRepository {
     suspend fun createSession(
         classId: String,
         className: String,
+        sessionNumber: String,
         teacherId: String,
         totalStudents: Int
     ): Result<String> {
@@ -20,6 +21,7 @@ class AttendanceRepository {
             val session = hashMapOf(
                 "classId" to classId,
                 "className" to className,
+                "sessionNumber" to sessionNumber,
                 "teacherId" to teacherId,
                 "date" to Timestamp.now(),
                 "totalStudents" to totalStudents,
@@ -68,6 +70,7 @@ class AttendanceRepository {
                 id = doc.id,
                 classId = doc.getString("classId") ?: "",
                 className = doc.getString("className") ?: "",
+                sessionNumber = doc.getString("sessionNumber") ?: "",
                 date = doc.getTimestamp("date") ?: Timestamp.now(),
                 teacherId = doc.getString("teacherId") ?: "",
                 totalStudents = (doc.getLong("totalStudents") ?: 0).toInt(),
@@ -116,6 +119,7 @@ class AttendanceRepository {
                     id = doc.id,
                     classId = doc.getString("classId") ?: "",
                     className = doc.getString("className") ?: "",
+                    sessionNumber = doc.getString("sessionNumber") ?: "",
                     date = doc.getTimestamp("date") ?: com.google.firebase.Timestamp.now(),
                     teacherId = doc.getString("teacherId") ?: "",
                     totalStudents = (doc.getLong("totalStudents") ?: 0).toInt(),

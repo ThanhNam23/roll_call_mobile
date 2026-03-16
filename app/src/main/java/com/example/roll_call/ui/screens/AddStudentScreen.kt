@@ -108,7 +108,7 @@ fun AddStudentScreen(
                 }
                 else -> {
                     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(uiState.students, key = { it.id }) { student ->
+                        items(uiState.students.sortedBy { it.studentCode }, key = { it.id }) { student ->
                             StudentManagementItem(
                                 student = student,
                                 onRegisterFace = { selectedStudent = student; showFaceDialog = true },

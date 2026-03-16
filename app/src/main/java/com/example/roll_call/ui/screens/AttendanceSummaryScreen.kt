@@ -87,6 +87,14 @@ fun AttendanceSummaryScreen(
                                             fontWeight = FontWeight.Bold,
                                             color = EduTextPrimary
                                         )
+                                        if (session.sessionNumber.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                "Buổi: ${session.sessionNumber}",
+                                                fontSize = 14.sp,
+                                                color = EduTextSecondary
+                                            )
+                                        }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         val dateStr = SimpleDateFormat(
                                             "dd/MM/yyyy HH:mm",

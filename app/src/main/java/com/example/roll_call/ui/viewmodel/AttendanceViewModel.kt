@@ -60,7 +60,7 @@ class AttendanceViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(lastRecognized = null)
     }
 
-    fun saveAttendance(classId: String, className: String, onSuccess: (String) -> Unit) {
+    fun saveAttendance(classId: String, className: String, sessionNumber: String, onSuccess: (String) -> Unit) {
         val teacherId = authRepository.currentUserId ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true)
@@ -68,7 +68,7 @@ class AttendanceViewModel : ViewModel() {
             val presentIds = _uiState.value.presentStudents
 
             val sessionResult = attendanceRepository.createSession(
-                classId, className, teacherId, students.size
+                classId, className, sessionNumber, teacherId, students.size
             )
             sessionResult.onFailure {
                 _uiState.value = _uiState.value.copy(isSaving = false, error = it.message)
