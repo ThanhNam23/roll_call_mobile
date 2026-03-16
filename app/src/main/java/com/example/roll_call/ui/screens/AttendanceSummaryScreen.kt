@@ -3,6 +3,7 @@ package com.example.roll_call.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roll_call.domain.model.AttendanceRecord
 import com.example.roll_call.domain.model.AttendanceStatus
+import com.example.roll_call.ui.theme.*
 import com.example.roll_call.ui.viewmodel.SummaryViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -36,22 +38,25 @@ fun AttendanceSummaryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kết quả điểm danh") }
+                title = { Text("Kết quả điểm danh") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = EduSurface)
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp) {
+            Surface(shadowElevation = 8.dp, color = EduSurface) {
                 Button(
                     onClick = onDone,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .height(52.dp)
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = EduBlue)
                 ) {
                     Text("Về trang chủ", fontSize = 16.sp)
                 }
             }
-        }
+        },
+        containerColor = EduBackground
     ) { padding ->
         Box(
             modifier = Modifier
@@ -72,21 +77,22 @@ fun AttendanceSummaryScreen(
                             item {
                                 Card(
                                     colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                                        containerColor = EduBlueLight
                                     )
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         Text(
                                             session.className,
                                             fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            color = EduTextPrimary
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         val dateStr = SimpleDateFormat(
                                             "dd/MM/yyyy HH:mm",
                                             Locale.getDefault()
                                         ).format(session.date.toDate())
-                                        Text("Ngày: $dateStr", fontSize = 14.sp)
+                                        Text("Ngày: $dateStr", fontSize = 14.sp, color = EduTextPrimary)
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -95,17 +101,17 @@ fun AttendanceSummaryScreen(
                                             StatItem(
                                                 label = "Có mặt",
                                                 value = session.presentCount.toString(),
-                                                color = MaterialTheme.colorScheme.primary
+                                                color = EduGreen
                                             )
                                             StatItem(
                                                 label = "Vắng",
                                                 value = (session.totalStudents - session.presentCount).toString(),
-                                                color = MaterialTheme.colorScheme.error
+                                                color = EduRed
                                             )
                                             StatItem(
                                                 label = "Tổng",
                                                 value = session.totalStudents.toString(),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = EduTextSecondary
                                             )
                                         }
                                     }
@@ -154,13 +160,18 @@ fun AttendanceSummaryScreen(
 fun StatItem(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = color)
-        Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 13.sp, color = EduTextSecondary)
     }
 }
 
 @Composable
 fun AttendanceRecordItem(record: AttendanceRecord) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = EduSurface),
+        elevation = CardDefaults.cardElevation(0.5.dp)
+    ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -170,22 +181,22 @@ fun AttendanceRecordItem(record: AttendanceRecord) {
                     Icons.Default.CheckCircle else Icons.Default.Close,
                 contentDescription = null,
                 tint = if (record.status == AttendanceStatus.PRESENT)
-                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    EduGreen else EduRed,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(record.studentName, fontWeight = FontWeight.Medium)
+                Text(record.studentName, fontWeight = FontWeight.Medium, color = EduTextPrimary)
                 Text(
                     record.studentCode,
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = EduTextSecondary
                 )
             }
             if (record.status == AttendanceStatus.PRESENT && record.timestamp != null) {
                 val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault())
                     .format(record.timestamp.toDate())
-                Text(timeStr, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(timeStr, fontSize = 12.sp, color = EduTextSecondary)
             }
         }
     }

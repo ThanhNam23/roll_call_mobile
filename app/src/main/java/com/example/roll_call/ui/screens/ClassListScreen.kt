@@ -1,22 +1,26 @@
 package com.example.roll_call.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roll_call.domain.model.ClassRoom
+import com.example.roll_call.ui.theme.*
 import com.example.roll_call.ui.viewmodel.ClassViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,79 +35,102 @@ fun ClassListScreen(
 
     if (showLogoutDialog) {
         AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Đăng xuất") },
-            text = { Text("Bạn có chắc muốn đăng xuất?") },
+            onDismissRequest = { showLogoutDialog = !showLogoutDialog },
+            title = { Text("Đăng xuất", color = EduTextPrimary) },
+            text = { Text("Bạn có chắc muốn đăng xuất?", color = EduTextSecondary) },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.logout()
-                    onLogout()
-                }) { Text("Đăng xuất") }
+                TextButton(onClick = { viewModel.logout(); onLogout() }) {
+                    Text("Đăng xuất", color = EduRed)
+                }
             },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) { Text("Hủy") }
-            }
+            dismissButton = { TextButton(onClick = { showLogoutDialog = !showLogoutDialog }) { Text("Hủy") } },
+            containerColor = EduSurface,
+            titleContentColor = EduTextPrimary,
+            textContentColor = EduTextSecondary
         )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Danh sách lớp học") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(EduBlue),
+                            contentAlignment = Alignment.Center
+                        ) { Text("📋", fontSize = 16.sp) }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("EduManage", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = EduTextPrimary)
+                            Text("Điểm danh & kiểm tra", fontSize = 11.sp, color = EduTextSecondary)
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.loadClasses() }) {
-                        Icon(Icons.Default.Refresh, "Tải lại")
+                        Icon(Icons.Default.Refresh, "Tải lại", tint = EduTextSecondary)
                     }
-                    IconButton(onClick = { showLogoutDialog = true }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, "Đăng xuất")
+                    IconButton(onClick = { showLogoutDialog = !showLogoutDialog }) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, "Đăng xuất", tint = EduTextSecondary)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = EduSurface)
             )
-        }
+        },
+        containerColor = EduBackground
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                uiState.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = EduBlue)
+                uiState.error != null -> Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Lỗi: ${uiState.error}", color = EduRed)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { viewModel.loadClasses() }, colors = ButtonDefaults.buttonColors(containerColor = EduBlue)) { Text("Thử lại") }
                 }
-                uiState.error != null -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Lỗi: ${uiState.error}", color = MaterialTheme.colorScheme.error)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.loadClasses() }) { Text("Thử lại") }
-                    }
+                uiState.classes.isEmpty() -> Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("📚", fontSize = 48.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Chưa có lớp học nào", color = EduTextSecondary)
                 }
-                uiState.classes.isEmpty() -> {
-                    Text(
-                        text = "Chưa có lớp học nào",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                else -> {
-                    LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.classes) { classRoom ->
-                            ClassCard(
-                                classRoom = classRoom,
-                                onClick = { onClassClick(classRoom.id, classRoom.name) }
-                            )
+                else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item {
+                        // Header
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Lớp học", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = EduTextPrimary)
+                                Text("Quản lý các lớp học", fontSize = 13.sp, color = EduTextSecondary)
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = EduBlueLight
+                            ) {
+                                Text(
+                                    "${uiState.classes.size} lớp",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = EduBlue
+                                )
+                            }
                         }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    items(uiState.classes) { classRoom ->
+                        ClassCard(classRoom = classRoom, onClick = { onClassClick(classRoom.id, classRoom.name) })
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 fun ClassCard(classRoom: ClassRoom, onClick: () -> Unit) {
@@ -111,37 +138,38 @@ fun ClassCard(classRoom: ClassRoom, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = EduSurface),
+        elevation = CardDefaults.cardElevation(0.5.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.List,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = classRoom.name,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = classRoom.subject,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${classRoom.studentCount} sinh viên",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Column {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("📚", fontSize = 18.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(classRoom.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = EduTextPrimary)
+                    Text(classRoom.subject, fontSize = 12.sp, color = EduTextSecondary)
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = EduTextMuted, modifier = Modifier.size(18.dp))
+            }
+            HorizontalDivider(color = EduBorder, thickness = 0.5.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, null, tint = EduGreen, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Điểm danh", fontSize = 12.sp, color = EduTextSecondary)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.People, null, tint = EduBlue, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${classRoom.studentCount} SV", fontSize = 12.sp, color = EduTextSecondary)
+                }
             }
         }
     }
 }
-

@@ -43,6 +43,14 @@ android {
     aaptOptions {
         noCompress += "tflite"
     }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            pickFirsts += "**/*.so"
+        }
+    }
 }
 
 dependencies {
@@ -86,9 +94,9 @@ dependencies {
     // Coil (load ảnh)
     implementation(libs.coil.compose)
 
-    // TFLite (ArcFace face recognition)
+    // TFLite (ArcFace/FaceNet face recognition)
     implementation(libs.tensorflow.lite)
-    implementation(libs.tensorflow.lite.support)
+    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.14.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roll_call.domain.model.Student
 import com.example.roll_call.ui.viewmodel.AttendanceViewModel
+import com.example.roll_call.ui.theme.*
 import com.example.roll_call.utils.FaceRecognitionHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -304,7 +305,7 @@ fun BoxScope.RecognitionOverlay(student: Student) {
             .align(Alignment.BottomCenter)
             .padding(16.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xCC4CAF50))
+            .background(EduGreen)
             .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -336,7 +337,7 @@ fun BoxScope.RecognitionOverlay(student: Student) {
 fun PresentStudentChip(student: Student) {
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
+        color = EduBlueLight,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -346,16 +347,16 @@ fun PresentStudentChip(student: Student) {
             Icon(
                 Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = EduBlue,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(student.name, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(student.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = EduTextPrimary)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 student.studentCode,
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = EduTextSecondary
             )
         }
     }

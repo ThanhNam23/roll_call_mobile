@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.roll_call.ui.screens.AddStudentScreen
+import com.example.roll_call.ui.screens.AttendanceHistoryScreen
 import com.example.roll_call.ui.screens.AttendanceSummaryScreen
 import com.example.roll_call.ui.screens.ClassListScreen
 import com.example.roll_call.ui.screens.FaceScannerScreen
@@ -57,6 +58,9 @@ fun AppNavHost(navController: NavHostController, startDestination: String) {
                 },
                 onManageStudents = {
                     navController.navigate(Screen.AddStudent.createRoute(classId, className))
+                },
+                onViewHistory = {
+                    navController.navigate(Screen.AttendanceHistory.createRoute(classId, className))
                 },
                 onBack = { navController.popBackStack() }
             )
@@ -113,6 +117,22 @@ fun AppNavHost(navController: NavHostController, startDestination: String) {
                         popUpTo(Screen.ClassList.route) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(
+            route = Screen.AttendanceHistory.route,
+            arguments = listOf(
+                navArgument("classId") { type = NavType.StringType },
+                navArgument("className") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val classId = backStackEntry.arguments?.getString("classId") ?: ""
+            val className = backStackEntry.arguments?.getString("className") ?: ""
+            AttendanceHistoryScreen(
+                classId = classId,
+                className = className,
+                onBack = { navController.popBackStack() }
             )
         }
     }

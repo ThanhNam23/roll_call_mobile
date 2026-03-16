@@ -6,6 +6,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -13,11 +16,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roll_call.domain.model.Student
+import com.example.roll_call.ui.theme.*
 import com.example.roll_call.ui.viewmodel.AttendanceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,6 +33,7 @@ fun StudentListScreen(
     className: String,
     onStartAttendance: () -> Unit,
     onManageStudents: () -> Unit,
+    onViewHistory: () -> Unit,
     onBack: () -> Unit,
     viewModel: AttendanceViewModel = viewModel()
 ) {
@@ -46,6 +53,9 @@ fun StudentListScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onViewHistory) {
+                        Icon(Icons.Default.DateRange, "Lịch sử điểm danh")
+                    }
                     IconButton(onClick = onManageStudents) {
                         Icon(Icons.Default.PersonAdd, "Quản lý sinh viên")
                     }
@@ -80,20 +90,21 @@ fun StudentListScreen(
                 }
                 else -> {
                     Column {
-                        Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Tổng sinh viên: ${uiState.students.size}", fontWeight = FontWeight.Medium)
-                                Text(
-                                    "Có embedding: ${uiState.students.count { it.faceEmbedding.isNotEmpty() }}",
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                    Surface(color = EduBackground) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Tổng: ${uiState.students.size}", fontWeight = FontWeight.Medium, color = EduTextPrimary)
+                            Text(
+                                "Embedding: ${uiState.students.count { it.faceEmbedding.isNotEmpty() }}",
+                                color = EduBlue,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
+                    }
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -111,32 +122,39 @@ fun StudentListScreen(
 
 @Composable
 fun StudentItem(student: Student) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val hasEmbedding = student.faceEmbedding.isNotEmpty()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = EduSurface),
+        elevation = CardDefaults.cardElevation(0.5.dp)
+    ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.Person,
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(24.dp),
+                tint = EduTextSecondary
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(student.name, fontWeight = FontWeight.Medium)
+                Text(student.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = EduTextPrimary)
                 Text(
                     student.studentCode,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 12.sp,
+                    color = EduTextSecondary
                 )
             }
-            if (student.faceEmbedding.isNotEmpty()) {
+            if (hasEmbedding) {
                 Icon(
                     Icons.Default.CheckCircle,
                     contentDescription = "Đã đăng ký khuôn mặt",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    tint = EduGreen,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

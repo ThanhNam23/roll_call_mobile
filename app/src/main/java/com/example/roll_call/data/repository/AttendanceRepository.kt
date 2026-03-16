@@ -104,5 +104,43 @@ class AttendanceRepository {
             Result.failure(e)
         }
     }
+
+    suspend fun getSessionsByClass(classId: String): Result<List<AttendanceSession>> {        return try {
+            val snapshot = db.collection("attendanceSessions")
+                .whereEqualTo("classId", classId)
+                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .get()
+                .await()
+            val sessions = snapshot.documents.map { doc ->
+                AttendanceSession(
+                    id = doc.id,
+                    classId = doc.getString("classId") ?: "",
+                    className = doc.getString("className") ?: "",
+                    date = doc.getTimestamp("date") ?: com.google.firebase.Timestamp.now(),
+                    teacherId = doc.getString("teacherId") ?: "",
+                    totalStudents = (doc.getLong("totalStudents") ?: 0).toInt(),
+                    presentCount = (doc.getLong("presentCount") ?: 0).toInt()
+                )
+            }
+            Result.success(sessions)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteSession(sessionId: String): Result<Unit> {
+        return try {
+            // Xóa tất cả records con trước
+            val records = db.collection("attendanceSessions")
+                .document(sessionId).collection("records").get().await()
+            val batch = db.batch()
+            records.documents.forEach { batch.delete(it.reference) }
+            batch.delete(db.collection("attendanceSessions").document(sessionId))
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 

@@ -28,6 +28,7 @@ coil = "2.7.0"
 # TFLite
 tensorflowLite = "2.14.0"
 tensorflowLiteSupport = "0.4.4"
+tensorflowLiteGpu = "2.14.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

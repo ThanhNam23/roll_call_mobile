@@ -70,5 +70,48 @@ class StudentRepository {
             Result.failure(e)
         }
     }
+
+    suspend fun deleteStudent(classId: String, studentId: String): Result<Unit> {
+        return try {
+            db.collection("classes")
+                .document(classId)
+                .collection("students")
+                .document(studentId)
+                .delete()
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateStudent(classId: String, studentId: String, name: String, studentCode: String): Result<Unit> {
+        return try {
+            db.collection("classes")
+                .document(classId)
+                .collection("students")
+                .document(studentId)
+                .update(mapOf("name" to name, "studentCode" to studentCode))
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // Kiểm tra mã sinh viên đã tồn tại trong lớp chưa (bỏ qua studentId hiện tại nếu đang sửa)
+    suspend fun isStudentCodeExists(classId: String, studentCode: String, excludeId: String = ""): Boolean {
+        return try {
+            val snapshot = db.collection("classes")
+                .document(classId)
+                .collection("students")
+                .whereEqualTo("studentCode", studentCode)
+                .get()
+                .await()
+            snapshot.documents.any { it.id != excludeId }
+        } catch (e: Exception) {
+            false
+        }
+    }
 }
 
