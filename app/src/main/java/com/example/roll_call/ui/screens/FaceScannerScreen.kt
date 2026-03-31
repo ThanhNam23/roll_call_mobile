@@ -42,6 +42,7 @@ import java.util.concurrent.Executors
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FaceScannerScreen(
+    sessionId: String,
     classId: String,
     className: String,
     onFinish: (String) -> Unit,
@@ -66,7 +67,13 @@ fun FaceScannerScreen(
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
-        viewModel.loadStudents(classId)
+        if (sessionId.isNotEmpty()) {
+            // Tiếp tục điểm danh session hiện có
+            viewModel.loadStudentsForSession(classId, sessionId)
+        } else {
+            // Tạo session mới
+            viewModel.loadStudents(classId)
+        }
     }
 
     val faceHelper = remember { FaceRecognitionHelper(context) }
@@ -83,8 +90,8 @@ fun FaceScannerScreen(
     val studentCooldowns = remember { mutableMapOf<String, Long>() }
     val COOLDOWN_MS = 5000L
 
-    // Dialog nhập tên buổi
-    if (showSessionNameDialog) {
+    // Dialog nhập tên buổi (chỉ hiển thị nếu tạo session mới)
+    if (showSessionNameDialog && sessionId.isEmpty()) {
         AlertDialog(
             onDismissRequest = { showSessionNameDialog = false },
             title = { Text("Tên buổi điểm danh") },
@@ -237,7 +244,15 @@ fun FaceScannerScreen(
                     )
                     Button(
                         onClick = {
-                            showSessionNameDialog = true
+                            if (sessionId.isNotEmpty()) {
+                                // Tiếp tục session hiện có - lưu ngay
+                                viewModel.updateSessionAttendance(sessionId) { finalSessionId ->
+                                    onFinish(finalSessionId)
+                                }
+                            } else {
+                                // Tạo session mới - hỏi tên buổi
+                                showSessionNameDialog = true
+                            }
                         },
                         enabled = !uiState.isSaving
                     ) {

@@ -20,7 +20,8 @@ data class AttendanceUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null,
-    val sessionId: String? = null
+    val sessionId: String? = null,
+    val isEditingSession: Boolean = false  // true nếu tiếp tục điểm danh session hiện có
 )
 
 class AttendanceViewModel : ViewModel() {
@@ -39,6 +40,43 @@ class AttendanceViewModel : ViewModel() {
                 onSuccess = { _uiState.value.copy(students = it, isLoading = false) },
                 onFailure = { _uiState.value.copy(error = it.message, isLoading = false) }
             )
+        }
+    }
+
+    fun loadStudentsForSession(classId: String, sessionId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, isEditingSession = true, sessionId = sessionId)
+            try {
+                // Load sinh viên của lớp
+                val studentsResult = studentRepository.getStudentsByClass(classId)
+                if (studentsResult.isFailure) {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = studentsResult.exceptionOrNull()?.message)
+                    return@launch
+                }
+                val students = studentsResult.getOrThrow()
+
+                // Load records đã có của session này
+                val recordsResult = attendanceRepository.getRecords(sessionId)
+                if (recordsResult.isFailure) {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = recordsResult.exceptionOrNull()?.message)
+                    return@launch
+                }
+                val records = recordsResult.getOrThrow()
+
+                // Cập nhật presentStudents từ records có status PRESENT
+                val presentIds = records
+                    .filter { it.status == AttendanceStatus.PRESENT }
+                    .map { it.studentId }
+                    .toSet()
+
+                _uiState.value = _uiState.value.copy(
+                    students = students,
+                    presentStudents = presentIds,
+                    isLoading = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+            }
         }
     }
 
@@ -76,6 +114,31 @@ class AttendanceViewModel : ViewModel() {
             }
 
             val sessionId = sessionResult.getOrThrow()
+            val records = students.map { student ->
+                AttendanceRecord(
+                    studentId = student.id,
+                    studentName = student.name,
+                    studentCode = student.studentCode,
+                    status = if (student.id in presentIds) AttendanceStatus.PRESENT else AttendanceStatus.ABSENT,
+                    timestamp = if (student.id in presentIds) Timestamp.now() else null
+                )
+            }
+
+            val saveResult = attendanceRepository.saveAttendanceRecords(sessionId, records)
+            _uiState.value = _uiState.value.copy(isSaving = false)
+            saveResult.fold(
+                onSuccess = { onSuccess(sessionId) },
+                onFailure = { _uiState.value = _uiState.value.copy(error = it.message) }
+            )
+        }
+    }
+
+    fun updateSessionAttendance(sessionId: String, onSuccess: (String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSaving = true)
+            val students = _uiState.value.students
+            val presentIds = _uiState.value.presentStudents
+
             val records = students.map { student ->
                 AttendanceRecord(
                     studentId = student.id,
