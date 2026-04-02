@@ -381,6 +381,43 @@ class FaceRecognitionHelper(private val context: Context? = null) {
         }
     }
 
+    /**
+     * Nhận diện khuôn mặt giáo viên
+     * So sánh embedding của khuôn mặt phát hiện với embedding của giáo viên
+     */
+    fun recognizeTeacher(
+        faceEmbedding: FloatArray,
+        teacherEmbedding: FloatArray,
+        threshold: Float = 0.75f
+    ): Boolean {
+        if (teacherEmbedding.isEmpty()) {
+            android.util.Log.d("FaceHelper", "Teacher embedding is empty")
+            return false
+        }
+
+        if (faceEmbedding.size != teacherEmbedding.size) {
+            android.util.Log.e(
+                "FaceHelper",
+                "MISMATCH: Detected embedding size=${faceEmbedding.size}, Teacher embedding size=${teacherEmbedding.size}"
+            )
+        }
+
+        val score = cosineSimilarity(faceEmbedding, teacherEmbedding)
+        android.util.Log.d(
+            "FaceHelper",
+            "Teacher face similarity: ${String.format("%.4f", score)}, size_detected=${faceEmbedding.size}, size_teacher=${teacherEmbedding.size}"
+        )
+
+        val isMatched = score >= threshold
+        if (isMatched) {
+            android.util.Log.d("FaceHelper", "✓ ACCEPT: Teacher matched with score=${String.format("%.4f", score)} >= threshold=$threshold")
+        } else {
+            android.util.Log.d("FaceHelper", "✗ REJECT: Teacher score=${String.format("%.4f", score)} < threshold=$threshold")
+        }
+
+        return isMatched
+    }
+
     fun getDetector() = detector
 
     fun close() = detector.close()

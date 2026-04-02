@@ -18,12 +18,14 @@ class AttendanceRepository {
         totalStudents: Int
     ): Result<String> {
         return try {
+            val now = Timestamp.now()
             val session = hashMapOf(
                 "classId" to classId,
                 "className" to className,
                 "sessionNumber" to sessionNumber,
                 "teacherId" to teacherId,
-                "date" to Timestamp.now(),
+                "date" to now,
+                "sessionStartTime" to now,  // Thời gian giáo viên bắt đầu = bây giờ
                 "totalStudents" to totalStudents,
                 "presentCount" to 0
             )
@@ -72,6 +74,7 @@ class AttendanceRepository {
                 className = doc.getString("className") ?: "",
                 sessionNumber = doc.getString("sessionNumber") ?: "",
                 date = doc.getTimestamp("date") ?: Timestamp.now(),
+                sessionStartTime = doc.getTimestamp("sessionStartTime") ?: Timestamp.now(),
                 teacherId = doc.getString("teacherId") ?: "",
                 totalStudents = (doc.getLong("totalStudents") ?: 0).toInt(),
                 presentCount = (doc.getLong("presentCount") ?: 0).toInt()
@@ -121,12 +124,88 @@ class AttendanceRepository {
                     className = doc.getString("className") ?: "",
                     sessionNumber = doc.getString("sessionNumber") ?: "",
                     date = doc.getTimestamp("date") ?: com.google.firebase.Timestamp.now(),
+                    sessionStartTime = doc.getTimestamp("sessionStartTime") ?: com.google.firebase.Timestamp.now(),
                     teacherId = doc.getString("teacherId") ?: "",
                     totalStudents = (doc.getLong("totalStudents") ?: 0).toInt(),
                     presentCount = (doc.getLong("presentCount") ?: 0).toInt()
                 )
             }
             Result.success(sessions)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveRecognition(
+        sessionId: String,
+        record: AttendanceRecord
+    ): Result<Unit> {
+        return try {
+            val sessionRef = db.collection("attendanceSessions").document(sessionId)
+            val recordRef = sessionRef.collection("records").document(record.studentId)
+
+            // Đọc session để lấy sessionStartTime
+            val sessionDoc = sessionRef.get().await()
+            val sessionStartTime = sessionDoc.getTimestamp("sessionStartTime") ?: Timestamp.now()
+            val studentRecognitionTime = record.timestamp ?: Timestamp.now()
+
+            // Tính toán status dựa vào thời gian
+            // Quy định: nếu điểm danh trong 15 phút đầu → PRESENT, sau đó → LATE
+            val GRACE_PERIOD_MS = 15 * 60 * 1000  // 15 phút
+            val timeDiffMs = studentRecognitionTime.seconds * 1000 - sessionStartTime.seconds * 1000
+            val finalStatus = if (timeDiffMs <= GRACE_PERIOD_MS) {
+                AttendanceStatus.PRESENT
+            } else {
+                AttendanceStatus.LATE
+            }
+
+            // Đọc record hiện tại để kiểm tra xem đã tồn tại chưa
+            val existingRecord = recordRef.get().await()
+            val wasAlreadyPresent = existingRecord.exists() &&
+                (existingRecord.getString("status") == AttendanceStatus.PRESENT.name ||
+                 existingRecord.getString("status") == AttendanceStatus.LATE.name)
+
+            // Đọc tất cả records hiện tại
+            val allRecords = recordRef.parent.get().await()
+            var currentPresentCount = allRecords.documents.count {
+                it.getString("status") == AttendanceStatus.PRESENT.name
+            }
+
+            // Tính presentCount mới dựa trên trạng thái cũ và mới
+            val newPresentCount = if (finalStatus == AttendanceStatus.PRESENT || finalStatus == AttendanceStatus.LATE) {
+                if (!wasAlreadyPresent) {
+                    // Record này chưa có trước → +1
+                    currentPresentCount + 1
+                } else {
+                    // Record này đã có trước → giữ nguyên
+                    currentPresentCount
+                }
+            } else {
+                // Record này là ABSENT
+                if (wasAlreadyPresent) {
+                    // Record này đã PRESENT/LATE trước → -1
+                    currentPresentCount - 1
+                } else {
+                    // Record này chưa PRESENT trước → giữ nguyên
+                    currentPresentCount
+                }
+            }
+
+            // Lưu hoặc cập nhật record với status đã tính
+            val batch = db.batch()
+            batch.set(
+                recordRef, hashMapOf(
+                    "studentId" to record.studentId,
+                    "studentName" to record.studentName,
+                    "studentCode" to record.studentCode,
+                    "status" to finalStatus.name,
+                    "timestamp" to studentRecognitionTime
+                )
+            )
+            batch.update(sessionRef, "presentCount", newPresentCount)
+            batch.commit().await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

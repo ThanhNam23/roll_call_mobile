@@ -8,6 +8,7 @@ data class AttendanceSession(
     val className: String = "",
     val sessionNumber: String = "",
     val date: Timestamp = Timestamp.now(),
+    val sessionStartTime: Timestamp = Timestamp.now(),  // Thời gian giáo viên bắt đầu điểm danh
     val teacherId: String = "",
     val totalStudents: Int = 0,
     val presentCount: Int = 0
@@ -22,6 +23,6 @@ data class AttendanceRecord(
 )
 
 enum class AttendanceStatus {
-    PRESENT, ABSENT
+    PRESENT, ABSENT, LATE
 }
 

@@ -12,6 +12,14 @@ class AuthRepository {
     val currentUserId: String? get() = auth.currentUser?.uid
     val isLoggedIn: Boolean get() = auth.currentUser != null
 
+    fun getCurrentTeacherName(): String? {
+        return auth.currentUser?.displayName ?: auth.currentUser?.email?.substringBefore("@")
+    }
+
+    fun getCurrentTeacherEmail(): String? {
+        return auth.currentUser?.email
+    }
+
     suspend fun login(email: String, password: String): Result<Teacher> {
         return try {
             val result = auth.signInWithEmailAndPassword(email, password).await()

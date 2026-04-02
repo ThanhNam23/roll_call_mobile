@@ -14,6 +14,7 @@ import com.example.roll_call.ui.screens.ClassListScreen
 import com.example.roll_call.ui.screens.FaceScannerScreen
 import com.example.roll_call.ui.screens.LoginScreen
 import com.example.roll_call.ui.screens.StudentListScreen
+import com.example.roll_call.ui.screens.TeacherFaceRegistrationScreen
 
 @Composable
 fun AppNavHost(navController: NavHostController, startDestination: String) {
@@ -38,6 +39,9 @@ fun AppNavHost(navController: NavHostController, startDestination: String) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onRegisterTeacherFace = {
+                    navController.navigate(Screen.TeacherFaceRegistration.route)
                 }
             )
         }
@@ -158,6 +162,12 @@ fun AppNavHost(navController: NavHostController, startDestination: String) {
             AttendanceHistoryScreen(
                 classId = classId,
                 className = className,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.TeacherFaceRegistration.route) {
+            TeacherFaceRegistrationScreen(
                 onBack = { navController.popBackStack() }
             )
         }

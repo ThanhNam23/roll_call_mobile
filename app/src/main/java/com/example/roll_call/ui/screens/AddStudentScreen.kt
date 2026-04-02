@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -335,11 +336,17 @@ fun FaceRegistrationDialog(
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
     val capturedEmbeddings = remember { mutableStateListOf<FloatArray>() }
-    var isCapturing by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("") }
+    var borderColor by remember { mutableStateOf(Color.White) }
+    var detectedFaceRect by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    var isRegistrationComplete by remember { mutableStateOf(false) }
+    var showFlash by remember { mutableStateOf(false) }  // Flash animation
 
-    // AtomicBoolean để đọc an toàn từ background thread của analyzer
-    val shouldCapture = remember { AtomicBoolean(false) }
+    // Threshold cho chất lượng mặt và kích thước tối thiểu
+    val FACE_SIZE_THRESHOLD = 0.3f  // Mặt phải chiếm ít nhất 30% khung hình
+    val MIN_GOOD_CAPTURES = 3  // Cần 3 ảnh tốt để hoàn tất
+    val AUTO_SAVE_DELAY_MS = 500L  // Delay trước khi tự động lưu
 
     DisposableEffect(Unit) {
         onDispose {
@@ -394,37 +401,78 @@ fun FaceRegistrationDialog(
                             LifecycleCameraController(context).apply {
                                 cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
                                 setImageAnalysisAnalyzer(cameraExecutor) { imageProxy ->
-                                    if (shouldCapture.compareAndSet(true, false)) {
-                                        // Lấy bitmap TRƯỚC khi close imageProxy
-                                        val bitmap = faceHelper.imageProxyToBitmap(imageProxy)
+                                    val bitmap = faceHelper.imageProxyToBitmap(imageProxy)
+
+                                    if (bitmap != null && !isProcessing && capturedEmbeddings.size < MIN_GOOD_CAPTURES) {
                                         imageProxy.close()
                                         scope.launch {
-                                            if (bitmap == null) {
-                                                statusText = "❌ Lỗi đọc ảnh, thử lại"
-                                                isCapturing = false
-                                                return@launch
-                                            }
                                             try {
-                                                // Detect face từ bitmap (InputImage.fromBitmap, không cần imageProxy)
                                                 val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
                                                 val faces = faceHelper.getDetector().process(inputImage).await()
                                                 val face = faces.firstOrNull()
+
                                                 if (face != null) {
-                                                    val cropped = faceHelper.cropFace(bitmap, face)
-                                                    if (cropped != null) {
-                                                        val embedding = faceHelper.extractEmbedding(cropped)
-                                                        capturedEmbeddings.add(embedding)
-                                                        statusText = "✅ Đã chụp ${capturedEmbeddings.size} ảnh"
+                                                    detectedFaceRect = face.boundingBox
+
+                                                    // Kiểm tra kích thước mặt
+                                                    val faceSize = (face.boundingBox.width() * face.boundingBox.height()) /
+                                                                  (bitmap.width * bitmap.height).toFloat()
+
+                                                    if (faceSize >= FACE_SIZE_THRESHOLD) {
+                                                        val cropped = faceHelper.cropFace(bitmap, face)
+                                                        if (cropped != null) {
+                                                            // Kiểm tra chất lượng ảnh
+                                                            val isGoodQuality = faceHelper.checkFaceQuality(cropped)
+
+                                                            if (isGoodQuality) {
+                                                                borderColor = Color(0xFF4CAF50)  // Xanh
+                                                                statusText = "✅ Mặt hợp lệ"
+
+                                                                // Auto-capture nếu mặt tốt
+                                                                isProcessing = true
+                                                                showFlash = true  // Bật flash
+                                                                val embedding = faceHelper.extractEmbedding(cropped)
+                                                                capturedEmbeddings.add(embedding)
+                                                                statusText = "✓ Đã chụp (${capturedEmbeddings.size}/$MIN_GOOD_CAPTURES)"
+
+                                                                // Auto-save khi đủ ảnh
+                                                                if (capturedEmbeddings.size >= MIN_GOOD_CAPTURES) {
+                                                                    isRegistrationComplete = true
+                                                                    statusText = "✓ Đã đăng ký khuôn mặt thành công!"
+                                                                    borderColor = Color(0xFF4CAF50)
+
+                                                                    // Delay trước khi auto-save
+                                                                    kotlinx.coroutines.delay(AUTO_SAVE_DELAY_MS)
+                                                                    val avgEmbedding = averageEmbeddings(capturedEmbeddings)
+                                                                    onEmbeddingSaved(avgEmbedding)
+                                                                }
+
+                                                                // Delay trước frame tiếp theo để tránh duplicate
+                                                                kotlinx.coroutines.delay(200L)  // Reduce để tắt flash nhanh hơn
+                                                                showFlash = false  // Tắt flash
+                                                                kotlinx.coroutines.delay(600L)
+                                                                isProcessing = false
+                                                            } else {
+                                                                borderColor = Color(0xFFF44336)  // Đỏ
+                                                                statusText = "❌ Ảnh mờ | Điều chỉnh ánh sáng & vị trí"
+                                                            }
+                                                        } else {
+                                                            borderColor = Color(0xFFF44336)
+                                                            statusText = "❌ Mặt mờ | Lau sạch camera & đứng cách 30-50cm"
+                                                        }
                                                     } else {
-                                                        statusText = "❌ Không thấy khuôn mặt rõ, thử lại"
+                                                        borderColor = Color(0xFFFFC107)  // Vàng - mặt quá nhỏ
+                                                        statusText = "⚠️ Mặt quá nhỏ | Di chuyển gần camera hơn"
                                                     }
                                                 } else {
-                                                    statusText = "❌ Không phát hiện khuôn mặt"
+                                                    borderColor = Color.White
+                                                    detectedFaceRect = null
+                                                    statusText = "🔍 Tìm khuôn mặt | Hướng mặt thẳng vào camera"
                                                 }
                                             } catch (e: Exception) {
-                                                statusText = "❌ Lỗi: ${e.message?.take(30)}"
+                                                borderColor = Color(0xFFF44336)
+                                                statusText = "❌ Lỗi: ${e.message?.take(20)}"
                                             }
-                                            isCapturing = false
                                         }
                                     } else {
                                         imageProxy.close()
@@ -445,31 +493,187 @@ fun FaceRegistrationDialog(
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        // Guide overlay with face frame
+                        // Guide overlay with dynamic face frame and border color
                         Box(modifier = Modifier.fillMaxSize()) {
-                            // Hướng dẫn căn giữa
+                            // ...existing code...
+
+                            // Flash animation khi chụp thành công
+                            if (showFlash) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.White.copy(alpha = 0.7f))
+                                )
+                            }
+                            // Vẽ frame hướng dẫn và detected face rect
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 val width = size.width
                                 val height = size.height
-                                val faceWidth = width * 0.6f
-                                val faceHeight = height * 0.7f
-                                val left = (width - faceWidth) / 2
-                                val top = (height - faceHeight) / 2
 
-                                // Vẽ hộp hướng dẫn
+                                // Tính toán kích thước frame hướng dẫn
+                                val guideWidth = width * 0.65f
+                                val guideHeight = height * 0.75f
+                                val guideLeft = (width - guideWidth) / 2
+                                val guideTop = (height - guideHeight) / 2
+                                val centerX = width / 2
+                                val centerY = height / 2
+
+                                // Tối nền bên ngoài frame (giúp tập trung vào khung chính)
                                 drawRect(
-                                    color = Color.White,
-                                    topLeft = androidx.compose.ui.geometry.Offset(left, top),
-                                    size = androidx.compose.ui.geometry.Size(faceWidth, faceHeight),
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                                    color = Color(0xAA000000),
+                                    topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                    size = androidx.compose.ui.geometry.Size(width, guideTop),
+                                    style = androidx.compose.ui.graphics.drawscope.Fill
+                                )
+                                drawRect(
+                                    color = Color(0xAA000000),
+                                    topLeft = androidx.compose.ui.geometry.Offset(0f, guideTop + guideHeight),
+                                    size = androidx.compose.ui.geometry.Size(width, height - guideTop - guideHeight),
+                                    style = androidx.compose.ui.graphics.drawscope.Fill
+                                )
+                                drawRect(
+                                    color = Color(0xAA000000),
+                                    topLeft = androidx.compose.ui.geometry.Offset(0f, guideTop),
+                                    size = androidx.compose.ui.geometry.Size(guideLeft, guideHeight),
+                                    style = androidx.compose.ui.graphics.drawscope.Fill
+                                )
+                                drawRect(
+                                    color = Color(0xAA000000),
+                                    topLeft = androidx.compose.ui.geometry.Offset(guideLeft + guideWidth, guideTop),
+                                    size = androidx.compose.ui.geometry.Size(width - guideLeft - guideWidth, guideHeight),
+                                    style = androidx.compose.ui.graphics.drawscope.Fill
+                                )
+
+                                // Vẽ viền frame chính (hình mặt - oval)
+                                val faceOvalWidth = guideWidth * 0.8f
+                                val faceOvalHeight = guideHeight * 0.85f
+                                val faceOvalLeft = guideLeft + (guideWidth - faceOvalWidth) / 2
+                                val faceOvalTop = guideTop + (guideHeight - faceOvalHeight) / 2
+
+                                // Viền ngoài (đậm hơn, màu động)
+                                drawOval(
+                                    color = borderColor,
+                                    topLeft = androidx.compose.ui.geometry.Offset(faceOvalLeft, faceOvalTop),
+                                    size = androidx.compose.ui.geometry.Size(faceOvalWidth, faceOvalHeight),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f)
+                                )
+
+                                // Viền trong (mỏng hơn, nhẹ hơn)
+                                drawOval(
+                                    color = borderColor.copy(alpha = 0.5f),
+                                    topLeft = androidx.compose.ui.geometry.Offset(faceOvalLeft + 8f, faceOvalTop + 8f),
+                                    size = androidx.compose.ui.geometry.Size(faceOvalWidth - 16f, faceOvalHeight - 16f),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+                                )
+
+                                // Vẽ điểm hướng dẫn cho mắt trái
+                                val leftEyeX = faceOvalLeft + faceOvalWidth * 0.3f
+                                val eyeY = faceOvalTop + faceOvalHeight * 0.35f
+                                drawCircle(
+                                    color = borderColor.copy(alpha = 0.6f),
+                                    radius = 4f,
+                                    center = androidx.compose.ui.geometry.Offset(leftEyeX, eyeY)
+                                )
+
+                                // Vẽ điểm hướng dẫn cho mắt phải
+                                val rightEyeX = faceOvalLeft + faceOvalWidth * 0.7f
+                                drawCircle(
+                                    color = borderColor.copy(alpha = 0.6f),
+                                    radius = 4f,
+                                    center = androidx.compose.ui.geometry.Offset(rightEyeX, eyeY)
+                                )
+
+                                // Vẽ điểm hướng dẫn cho mũi
+                                val noseX = centerX
+                                val noseY = faceOvalTop + faceOvalHeight * 0.5f
+                                drawCircle(
+                                    color = borderColor.copy(alpha = 0.6f),
+                                    radius = 3f,
+                                    center = androidx.compose.ui.geometry.Offset(noseX, noseY)
+                                )
+
+                                // Vẽ đường hướng dẫn (ngang qua mắt)
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.3f),
+                                    start = androidx.compose.ui.geometry.Offset(guideLeft + 10f, eyeY),
+                                    end = androidx.compose.ui.geometry.Offset(guideLeft + guideWidth - 10f, eyeY),
+                                    strokeWidth = 1f
+                                )
+
+                                // Vẽ đường hướng dẫn (dọc qua mũi)
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.3f),
+                                    start = androidx.compose.ui.geometry.Offset(noseX, guideTop + 10f),
+                                    end = androidx.compose.ui.geometry.Offset(noseX, guideTop + guideHeight - 10f),
+                                    strokeWidth = 1f
+                                )
+
+                                // Vẽ 4 góc để định hướng
+                                val cornerSize = 25f
+                                val cornerWidth = 3f
+
+                                // Góc trái trên
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f, faceOvalTop),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f, faceOvalTop + cornerSize),
+                                    strokeWidth = cornerWidth
+                                )
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f, faceOvalTop),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f + cornerSize, faceOvalTop),
+                                    strokeWidth = cornerWidth
+                                )
+
+                                // Góc phải trên
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f, faceOvalTop),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f, faceOvalTop + cornerSize),
+                                    strokeWidth = cornerWidth
+                                )
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f, faceOvalTop),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f - cornerSize, faceOvalTop),
+                                    strokeWidth = cornerWidth
+                                )
+
+                                // Góc trái dưới
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f, faceOvalTop + faceOvalHeight),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f, faceOvalTop + faceOvalHeight - cornerSize),
+                                    strokeWidth = cornerWidth
+                                )
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f, faceOvalTop + faceOvalHeight),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft - 10f + cornerSize, faceOvalTop + faceOvalHeight),
+                                    strokeWidth = cornerWidth
+                                )
+
+                                // Góc phải dưới
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f, faceOvalTop + faceOvalHeight),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f, faceOvalTop + faceOvalHeight - cornerSize),
+                                    strokeWidth = cornerWidth
+                                )
+                                drawLine(
+                                    color = borderColor.copy(alpha = 0.7f),
+                                    start = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f, faceOvalTop + faceOvalHeight),
+                                    end = androidx.compose.ui.geometry.Offset(faceOvalLeft + faceOvalWidth + 10f - cornerSize, faceOvalTop + faceOvalHeight),
+                                    strokeWidth = cornerWidth
                                 )
                             }
 
-                            // Status overlay - bottom center
+                            // Status overlay - top center
                             if (statusText.isNotEmpty()) {
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.BottomCenter)
+                                        .align(Alignment.TopCenter)
                                         .padding(12.dp)
                                         .background(Color(0xDD000000), RoundedCornerShape(8.dp))
                                         .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -477,37 +681,28 @@ fun FaceRegistrationDialog(
                                     Text(
                                         statusText,
                                         color = Color.White,
-                                        fontSize = 13.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
                             }
 
-                            // Nút chụp - dưới phải
-                            Button(
-                                onClick = {
-                                    if (!isCapturing && capturedEmbeddings.size < 3) {
-                                        isCapturing = true
-                                        statusText = "📸 Đang chụp..."
-                                        shouldCapture.set(true)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(12.dp),
-                                enabled = !isCapturing && capturedEmbeddings.size < 3,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = EduBlue,
-                                    disabledContainerColor = EduBlue.copy(alpha = 0.6f)
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    "📸 Chụp",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                            // Progress counter - top right
+                            if (capturedEmbeddings.size > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(12.dp)
+                                        .background(borderColor.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        "${capturedEmbeddings.size}/$MIN_GOOD_CAPTURES",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
 
@@ -543,57 +738,71 @@ fun FaceRegistrationDialog(
                 if (capturedEmbeddings.size > 0) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         LinearProgressIndicator(
-                            progress = { (capturedEmbeddings.size / 3f).coerceAtMost(1f) },
+                            progress = { (capturedEmbeddings.size / MIN_GOOD_CAPTURES.toFloat()).coerceAtMost(1f) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(6.dp),
-                            color = EduBlue,
+                                .height(8.dp),
+                            color = if (borderColor == Color(0xFF4CAF50)) Color(0xFF4CAF50) else Color(0xFFF44336),
                             trackColor = EduBorder
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "${capturedEmbeddings.size}/3 ảnh",
+                            "${capturedEmbeddings.size}/$MIN_GOOD_CAPTURES ảnh hợp lệ",
                             fontSize = 12.sp,
-                            color = EduTextSecondary
+                            color = EduTextSecondary,
+                            fontWeight = FontWeight.Medium
                         )
                     }
+                } else {
+                    Text(
+                        "Hướng dẫn: Đặt khuôn mặt vào khung hình để tự động đăng ký",
+                        fontSize = 12.sp,
+                        color = EduTextSecondary,
+                        textAlign = TextAlign.Center
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Action buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
+                if (!isRegistrationComplete) {
+                    Button(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .height(44.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Hủy", fontWeight = FontWeight.Medium, color = EduBlue)
-                    }
-                    Button(
-                        onClick = {
-                            val avgEmbedding = averageEmbeddings(capturedEmbeddings)
-                            onEmbeddingSaved(avgEmbedding)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        enabled = capturedEmbeddings.size >= 1,
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = EduGreen,
-                            disabledContainerColor = EduBorder
-                        )
+                        colors = ButtonDefaults.buttonColors(containerColor = EduRed)
                     ) {
-                        Text(
-                            "✓ Lưu",
-                            fontWeight = FontWeight.Medium
-                        )
+                        Text("Hủy", fontWeight = FontWeight.Medium)
+                    }
+                } else {
+                    // Hiển thị tin nhắn thành công
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF4CAF50).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF4CAF50), RoundedCornerShape(8.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "✓ Đăng ký khuôn mặt thành công!",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4CAF50),
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                "Hệ thống đã xác nhận đăng ký với ${capturedEmbeddings.size} ảnh tốt",
+                                fontSize = 12.sp,
+                                color = EduTextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }

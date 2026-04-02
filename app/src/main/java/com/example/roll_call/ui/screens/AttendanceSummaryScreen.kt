@@ -106,20 +106,24 @@ fun AttendanceSummaryScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceEvenly
                                         ) {
+                                            val presentRecords = uiState.records.filter { it.status == AttendanceStatus.PRESENT }
+                                            val lateRecords = uiState.records.filter { it.status == AttendanceStatus.LATE }
+                                            val absentRecords = uiState.records.filter { it.status == AttendanceStatus.ABSENT }
+
                                             StatItem(
                                                 label = "Có mặt",
-                                                value = session.presentCount.toString(),
+                                                value = presentRecords.size.toString(),
                                                 color = EduGreen
                                             )
                                             StatItem(
-                                                label = "Vắng",
-                                                value = (session.totalStudents - session.presentCount).toString(),
-                                                color = EduRed
+                                                label = "Trễ",
+                                                value = lateRecords.size.toString(),
+                                                color = EduBlue
                                             )
                                             StatItem(
-                                                label = "Tổng",
-                                                value = session.totalStudents.toString(),
-                                                color = EduTextSecondary
+                                                label = "Vắng",
+                                                value = absentRecords.size.toString(),
+                                                color = EduRed
                                             )
                                         }
                                     }
@@ -129,6 +133,7 @@ fun AttendanceSummaryScreen(
 
                         // Present list
                         val presentRecords = uiState.records.filter { it.status == AttendanceStatus.PRESENT }
+                        val lateRecords = uiState.records.filter { it.status == AttendanceStatus.LATE }
                         val absentRecords = uiState.records.filter { it.status == AttendanceStatus.ABSENT }
 
                         if (presentRecords.isNotEmpty()) {
@@ -140,6 +145,20 @@ fun AttendanceSummaryScreen(
                                 )
                             }
                             items(presentRecords) { record ->
+                                AttendanceRecordItem(record = record)
+                            }
+                        }
+
+                        if (lateRecords.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "⏱️ Trễ (${lateRecords.size})",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                            items(lateRecords) { record ->
                                 AttendanceRecordItem(record = record)
                             }
                         }
@@ -184,12 +203,16 @@ fun AttendanceRecordItem(record: AttendanceRecord) {
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val (icon, color) = when (record.status) {
+                AttendanceStatus.PRESENT -> Icons.Default.CheckCircle to EduGreen
+                AttendanceStatus.LATE -> Icons.Default.CheckCircle to EduBlue
+                AttendanceStatus.ABSENT -> Icons.Default.Close to EduRed
+            }
+
             Icon(
-                imageVector = if (record.status == AttendanceStatus.PRESENT)
-                    Icons.Default.CheckCircle else Icons.Default.Close,
+                imageVector = icon,
                 contentDescription = null,
-                tint = if (record.status == AttendanceStatus.PRESENT)
-                    EduGreen else EduRed,
+                tint = color,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -201,7 +224,7 @@ fun AttendanceRecordItem(record: AttendanceRecord) {
                     color = EduTextSecondary
                 )
             }
-            if (record.status == AttendanceStatus.PRESENT && record.timestamp != null) {
+            if ((record.status == AttendanceStatus.PRESENT || record.status == AttendanceStatus.LATE) && record.timestamp != null) {
                 val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault())
                     .format(record.timestamp.toDate())
                 Text(timeStr, fontSize = 12.sp, color = EduTextSecondary)

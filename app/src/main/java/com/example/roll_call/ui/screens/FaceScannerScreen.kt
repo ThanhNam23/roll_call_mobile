@@ -49,6 +49,8 @@ fun FaceScannerScreen(
     onBack: () -> Unit,
     viewModel: AttendanceViewModel = viewModel()
 ) {
+    android.util.Log.d("FaceScannerScreen", "Opening: sessionId='$sessionId', classId='$classId', className='$className'")
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -67,60 +69,36 @@ fun FaceScannerScreen(
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+
+        // Load teacher face profile FIRST (chờ xong trước khi load students)
+        viewModel.loadTeacherFaceProfile()
+
+        // Delay 1000ms (tăng từ 500ms) để chắc chắn teacher profile được load xong + Firestore sync
+        delay(1000)
+
+        // Load students hoặc tạo session mới
         if (sessionId.isNotEmpty()) {
-            // Tiếp tục điểm danh session hiện có
             viewModel.loadStudentsForSession(classId, sessionId)
         } else {
-            // Tạo session mới
-            viewModel.loadStudents(classId)
+            viewModel.createNewSession(classId, className) { newSessionId ->
+                android.util.Log.d("FaceScannerScreen", "New session created: $newSessionId")
+            }
         }
     }
 
     val faceHelper = remember { FaceRecognitionHelper(context) }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var isProcessing by remember { mutableStateOf(false) }
-    var showSessionNameDialog by remember { mutableStateOf(false) }
-    var sessionNumber by remember { mutableStateOf("") }
 
     // Multi-frame voting: tích lũy kết quả nhận diện trước khi xác nhận
     val recognitionVotes = remember { mutableMapOf<String, Int>() }   // studentId -> count
     val VOTES_REQUIRED = 3
-    val CONFIDENCE_THRESHOLD = 0.75f  // FaceNet 128-dim threshold
+    val CONFIDENCE_THRESHOLD = 0.75f  // FaceNet 128-dim threshold cho students
+    val TEACHER_CONFIDENCE_THRESHOLD = 0.65f  // Threshold thấp hơn cho teacher (nhận diện lỏng hơn)
     // Cooldown per student: tránh nhận diện lại người vừa điểm danh
     val studentCooldowns = remember { mutableMapOf<String, Long>() }
     val COOLDOWN_MS = 5000L
 
-    // Dialog nhập tên buổi (chỉ hiển thị nếu tạo session mới)
-    if (showSessionNameDialog && sessionId.isEmpty()) {
-        AlertDialog(
-            onDismissRequest = { showSessionNameDialog = false },
-            title = { Text("Tên buổi điểm danh") },
-            text = {
-                OutlinedTextField(
-                    value = sessionNumber,
-                    onValueChange = { sessionNumber = it },
-                    placeholder = { Text("Nhập tên buổi (tùy chọn)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showSessionNameDialog = false
-                    viewModel.saveAttendance(classId, className, sessionNumber) { sessionIdResult ->
-                        onFinish(sessionIdResult)
-                    }
-                }) {
-                    Text("Lưu")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSessionNameDialog = false }) {
-                    Text("Hủy")
-                }
-            }
-        )
-    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -157,40 +135,78 @@ fun FaceScannerScreen(
                     CameraPreview(
                         modifier = Modifier.fillMaxSize(),
                         onFaceDetected = { embedding ->
-                            if (!isProcessing && uiState.students.isNotEmpty()) {
+                            if (!isProcessing) {
                                 isProcessing = true
                                 scope.launch {
-                                    val student = faceHelper.recognizeStudent(
-                                        embedding,
-                                        uiState.students,
-                                        threshold = CONFIDENCE_THRESHOLD
-                                    )
-                                    if (student != null) {
-                                        val now = System.currentTimeMillis()
-                                        val lastTime = studentCooldowns[student.id] ?: 0L
-                                        if (now - lastTime > COOLDOWN_MS) {
-                                            // Cộng vote cho student này
-                                            val votes = (recognitionVotes[student.id] ?: 0) + 1
-                                            recognitionVotes[student.id] = votes
-                                            // Reset votes của student khác
-                                            recognitionVotes.keys
-                                                .filter { it != student.id }
-                                                .forEach { recognitionVotes[it] = 0 }
+                                    // ===== TEACHER DETECTION (độc lập, không cần students) =====
+                                    val teacherEmbedding = uiState.teacherFaceEmbedding
+                                    val hasTeacherEmbedding = !teacherEmbedding.isNullOrEmpty()
 
-                                            if (votes >= VOTES_REQUIRED && student.id !in uiState.presentStudents) {
-                                                // Đủ vote → xác nhận điểm danh
-                                                recognitionVotes[student.id] = 0
-                                                studentCooldowns[student.id] = now
-                                                viewModel.markPresent(student)
-                                                delay(2000)
-                                                viewModel.clearLastRecognized()
-                                            }
-                                        }
+                                    android.util.Log.d(
+                                        "FaceScannerScreen",
+                                        "Face detected; teacherLoaded=$hasTeacherEmbedding, studentCount=${uiState.students.size}"
+                                    )
+
+                                    val isTeacherFace = if (hasTeacherEmbedding) {
+                                        val teacherEmbArray = teacherEmbedding!!.toFloatArray()
+                                        android.util.Log.d(
+                                            "FaceScannerScreen",
+                                            "Comparing embeddings - detected: ${embedding.size}, teacher: ${teacherEmbArray.size}"
+                                        )
+                                        faceHelper.recognizeTeacher(
+                                            embedding,
+                                            teacherEmbArray,
+                                            TEACHER_CONFIDENCE_THRESHOLD
+                                        )
                                     } else {
-                                        // Không nhận ra → reset tất cả votes
-                                        recognitionVotes.clear()
+                                        android.util.Log.d("FaceScannerScreen", "Teacher embedding is null or empty!")
+                                        false
                                     }
-                                    delay(300) // throttle 300ms giữa các frame
+
+                                    if (isTeacherFace) {
+                                        android.util.Log.d("FaceScannerScreen", "Teacher face detected")
+                                        viewModel.showTeacherMessage()
+                                        delay(1500)
+                                        viewModel.clearTeacherMessage()
+                                    }
+                                    // ===== STUDENT DETECTION (chỉ chạy nếu không phải teacher + students ready) =====
+                                    else if (uiState.students.isNotEmpty()) {
+                                        val student = faceHelper.recognizeStudent(
+                                            embedding,
+                                            uiState.students,
+                                            threshold = CONFIDENCE_THRESHOLD
+                                        )
+                                        if (student != null) {
+                                            val now = System.currentTimeMillis()
+                                            val lastTime = studentCooldowns[student.id] ?: 0L
+                                            if (now - lastTime > COOLDOWN_MS) {
+                                                val votes = (recognitionVotes[student.id] ?: 0) + 1
+                                                recognitionVotes[student.id] = votes
+
+                                                recognitionVotes.keys
+                                                    .filter { it != student.id }
+                                                    .forEach { recognitionVotes[it] = 0 }
+
+                                                if (votes >= VOTES_REQUIRED && student.id !in uiState.presentStudents) {
+                                                    recognitionVotes[student.id] = 0
+                                                    studentCooldowns[student.id] = now
+                                                    viewModel.markPresent(student)
+
+                                                    val currentSessionId = uiState.sessionId
+                                                    if (!currentSessionId.isNullOrEmpty()) {
+                                                        viewModel.saveRecognition(currentSessionId, student)
+                                                    }
+
+                                                    delay(2000)
+                                                    viewModel.clearLastRecognized()
+                                                }
+                                            }
+                                        } else {
+                                            recognitionVotes.clear()
+                                        }
+                                    }
+
+                                    delay(300)
                                     isProcessing = false
                                 }
                             }
@@ -202,6 +218,25 @@ fun FaceScannerScreen(
                     // Overlay nhận diện
                     uiState.lastRecognized?.let { student ->
                         RecognitionOverlay(student = student)
+                    }
+
+                    // Teacher message overlay
+                    if (uiState.showTeacherMessage) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(16.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Yellow.copy(alpha = 0.9f))
+                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                "👨‍🏫 Đây là khuôn mặt giáo viên\nVui lòng đặt sinh viên vào camera",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
                     }
 
                     // Loading indicator
@@ -239,19 +274,15 @@ fun FaceScannerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Đã điểm danh: ${uiState.presentStudents.size}/${uiState.students.size}",
+                        "Đã điểm danh: ${uiState.presentStudents.size}",
                         fontWeight = FontWeight.SemiBold
                     )
                     Button(
                         onClick = {
-                            if (sessionId.isNotEmpty()) {
-                                // Tiếp tục session hiện có - lưu ngay
-                                viewModel.updateSessionAttendance(sessionId) { finalSessionId ->
-                                    onFinish(finalSessionId)
-                                }
-                            } else {
-                                // Tạo session mới - hỏi tên buổi
-                                showSessionNameDialog = true
+                            // Kết thúc buổi điểm danh
+                            val currentSessionId = uiState.sessionId
+                            if (currentSessionId != null && currentSessionId.isNotEmpty()) {
+                                onFinish(currentSessionId)
                             }
                         },
                         enabled = !uiState.isSaving
@@ -265,7 +296,7 @@ fun FaceScannerScreen(
                         } else {
                             Icon(Icons.Default.Done, null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Lưu")
+                            Text("Kết thúc")
                         }
                     }
                 }

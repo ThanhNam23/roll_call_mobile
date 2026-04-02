@@ -28,6 +28,7 @@ import com.example.roll_call.ui.viewmodel.ClassViewModel
 fun ClassListScreen(
     onClassClick: (String, String) -> Unit,
     onLogout: () -> Unit,
+    onRegisterTeacherFace: () -> Unit,
     viewModel: ClassViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -70,6 +71,9 @@ fun ClassListScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onRegisterTeacherFace) {
+                        Icon(Icons.Default.Face, "Đăng ký khuôn mặt", tint = EduTextSecondary)
+                    }
                     IconButton(onClick = { viewModel.loadClasses() }) {
                         Icon(Icons.Default.Refresh, "Tải lại", tint = EduTextSecondary)
                     }
